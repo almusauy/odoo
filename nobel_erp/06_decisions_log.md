@@ -1759,3 +1759,95 @@ Marc Demo · شركاته: My Company (Chicago) · My US Company ·
 
 المقيس بعد الإصلاح: `0 failed, 0 error(s) of 714 tests` بالبيانات
 التجريبية، و`Marc Demo` بقي ببطاقته الأصلية وحدها.
+
+---
+
+## مذكّرة ٠٩-٠٥ — 🔴 طبعة المؤسسة تُطفئ شبكة أمان الدفع بأودو
+
+**الحالة:** عُطلٌ حقيقي بالمنتج، لا خلل اختبار. اكتُشف من بناء المالك
+(`615c3f4`) وأُصلح ومقيسٌ بالوضعين.
+
+### ما ظهر
+
+بناء المالك على odoo.sh رجّع: `4 failed, 1 error(s) of 250 tests`
+
+```
+ERROR: TestBatch3.test_160_cash_customer_no_delivery_until_paid
+FAIL : TestBatch6Acct.test_653_ar_aging_buckets
+FAIL : TestBatch6Perm.test_612_target_has_collected_measure
+FAIL : TestBatch6Perm.test_618_days_to_pay_never_negative
+FAIL : TestBatch6Pos.test_600_refund_reduces_commission_pro_rata
+```
+
+خمستها تعبر عندنا (المجتمع) وتسقط عنده (المؤسسة). والقاسم المشترك
+بينها واحد: **كلها تسجّل سند قبض ثم تفترض أن الفاتورة انقفلت**.
+
+### السبب — من مصدر أودو، لا تخميناً
+
+| الموضع | النص |
+|---|---|
+| `account/models/account_move.py:6965` | `_get_invoice_in_payment_state` ترجع `'paid'`، ونصّها: «تُتجاوَز **بوحدة المحاسبة** لتفعيل حالة `in_payment`» — أي `account_accountant` (مؤسسة) |
+| `account/models/account_payment.py:849` | `accounting_installed = ..._get_invoice_in_payment_state() == 'in_payment'` — **نفس الخطّاف** هو مقياس «هل المحاسبة الكاملة منصَّبة» |
+| `account/models/account_payment.py:852` | `if not accounting_installed and not pay.outstanding_account_id:` ⇒ أودو يملأ «الحساب المعلّق» **بطبعة المجتمع وحدها** |
+| `account/models/account_payment.py:991` | `need_move = self.filtered(lambda p: not p.move_id and p.outstanding_account_id)` ⇒ دفعةٌ بلا حساب معلّق **لا يُخلق لها قيد إطلاقاً** |
+| `account/models/account_payment_method.py:109` | `payment_account_id` بلا `default` وبلا `compute` ⇒ فارغ ما لم يُملأ |
+| `account/tests/common.py:174-180` | **أودو نفسه** يملؤه بيده بإعداد اختباراته |
+
+⇒ يوميّة المصرف عندنا (`BNK1`) كانت بلا حساب معلّق على طرق دفعها.
+بالمجتمع: الشبكة تملؤه ⇒ كل شيء يشتغل. بالمؤسسة: يبقى فارغاً ⇒
+**سند القبض ينحفظ بلا قيد محاسبي** والفاتورة تبقى مفتوحة **بصمت**.
+
+### المقياس (محلياً، بمحاكاة المؤسسة برقعة على نفس الخطّاف)
+
+```
+FAIL: test_every_payment_journal_has_an_outstanding_account
+  ['شركة جبل / BNK1 / Manual Payment', 'شركة جبل / BNK1 / Manual Payment',
+   'شركة غابات / BNK1 / Manual Payment', 'شركة غابات / BNK1 / Manual Payment',
+   'شركة نوبل / BNK1 / Manual Payment', 'شركة نوبل / BNK1 / Manual Payment']
+
+FAIL: test_bank_payment_reconciles_the_invoice_under_enterprise
+  AssertionError: account.move() is not true :
+  سند القبض انحفظ بلا قيد محاسبي — حساب المصرف المعلّق مفقود
+```
+
+### الأثر لو راح للمالك بهذه الحالة
+
+* **الزبون النقدي ما يستلم بضاعته أبداً** — الحارس يقرأ المتبقي،
+  والمتبقي ما ينزل (`stock_picking.py:291`)
+* **أعمار الذمم ما تتحرك بالسداد** — الشريحة تبقى كما هي
+* **العمولة ما تُستحق و«المحصَّل» يبقى صفراً** — للأبد
+* والأسوأ: **ما ينطلع خطأ**. الكاشير يشوف سند قبض محفوظاً.
+
+### الإصلاح
+
+`setup_payment_outstanding_accounts` (setup.py) — يملأ حساب
+«المقبوضات/المدفوعات المعلّقة» على يوميّات المصرف **صراحةً** بنفس
+مرجع أودو (`account_journal_payment_debit/credit_account_id` من القالب،
+وإلا `transfer_account_id`)، ولا يمسّ يوميّةً مضبوطة أصلاً. مربوط
+بالتنصيب (`hooks.py`) وبسلسلة `nbl_reconcile_setup` معاً.
+
+الصناديق كانت مضبوطة من قبل (`setup_cash_journals`: النقد يدخل حساب
+الدرج مباشرةً) ⇒ **قبضُ الصندوق تحصيلٌ تام بالطبعتين**، وهو ما يقصده
+هذا السوق. والمصرف يبقى «قيد الدفع» حتى كشف المصرف — وهو المطلوب
+بالضبط (تدقيق ٠٩-٠١ [8]: الشيك المسلَّم ليس تحصيلاً).
+
+### وعليه صُحّحت خمسة اختبارات كانت تقيس شيئاً غير ما تقول
+
+معالج التسديد يختار **أول** يوميّة قبض وهي المصرف. فاختبارٌ يقول
+«الزبون دفع» ويسجّل على المصرف كان — بالمؤسسة — يقيس **شيكاً
+بالطريق** لا تحصيلاً. صارت تصرّح بصندوق الفرع
+(`nbl_common.nbl_cash_journal`)، كما تسوّي اختبارات فرق الصرف من قبل
+(`_usd_cash_journal`). ومعها `test_190` (العمولة) و`test_603`.
+
+### حارسان دائمان — واحدٌ ساكن وواحدٌ سلوكي
+
+`tests/test_enterprise_edition.py`:
+1. كل يوميّة قبض بشركات المجموعة عليها حساب معلّق صريح — يسقط
+   بالطبعتين لو رجع أحدٌ يتّكل على شبكة أمان المجتمع.
+2. سند مصرف **يولّد قيداً ويقفل الفاتورة** ومحيطُه رقعةٌ تحاكي
+   المؤسسة على نفس خطّاف أودو (حيلة مستعملة بأودو نفسه:
+   `account/tests/test_account_move_reconcile.py:5560`).
+3. وقبضُ الصندوق «مدفوعة» تامّة تحت نفس الرقعة.
+
+⇒ **صارت المؤسسة قابلةً للاختبار محلياً** بلا مصدرها — على هذا
+الخطّاف بالذات. وهذا يسدّ جزءاً من فجوة «ما أقدر أعيد بناءه عندي».
