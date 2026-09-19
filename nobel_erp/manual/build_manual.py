@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """يبني دليل المستخدم المصوَّر (HTML عربي RTL) من الصور المأخوذة على nbl_sim."""
 import os
-WORK = os.environ.get('NBL_MANUAL_WORK', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'work'))
+WORK = os.path.abspath(os.environ.get('NBL_MANUAL_WORK', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'work')))
 CHROME = os.environ.get('NBL_CHROME', '/opt/pw-browsers/chromium-1194/chrome-linux/chrome')
 import base64, io, json, os, re, sys
 from PIL import Image
@@ -20,7 +20,7 @@ def img_data(path):
 
 MISSING = []
 def fig(path, caption):
-    full = path if path.startswith('/') else M + '/' + path
+    full = path if os.path.isabs(path) else os.path.join(M, path)
     if not os.path.exists(full):
         MISSING.append(path); return ''
     return ('<figure><img src="%s" alt="%s"/><figcaption>%s</figcaption></figure>'
