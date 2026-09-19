@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 """يبني دليل المستخدم المصوَّر (HTML عربي RTL) من الصور المأخوذة على nbl_sim."""
+import os
+WORK = os.environ.get('NBL_MANUAL_WORK', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'work'))
+CHROME = os.environ.get('NBL_CHROME', '/opt/pw-browsers/chromium-1194/chrome-linux/chrome')
 import base64, io, json, os, re, sys
 from PIL import Image
 
-S = '/tmp/claude-0/-home-user-odoo/79312f4c-d194-5397-b6b3-b311dc77f979/scratchpad'
+S = WORK
 M = S + '/manual'
-OUT_HTML = M + '/nobel_user_manual.html'
+OUT_HTML = os.environ.get('NBL_MANUAL_OUT', M + '/nobel_user_manual.html')
 IMG_W = 1100
 
 def img_data(path):

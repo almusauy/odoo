@@ -1,7 +1,10 @@
+import os
+WORK = os.environ.get('NBL_MANUAL_WORK', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'work'))
+CHROME = os.environ.get('NBL_CHROME', '/opt/pw-browsers/chromium-1194/chrome-linux/chrome')
 import sys, json, os, re
 from playwright.sync_api import sync_playwright
-CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'; BASE = 'http://127.0.0.1:9096'
-ROOT = '/tmp/claude-0/-home-user-odoo/79312f4c-d194-5397-b6b3-b311dc77f979/scratchpad/manual'
+BASE = 'http://127.0.0.1:9096'
+ROOT = WORK + '/manual'
 def login(p, user):
     p.goto(BASE + '/web/login', wait_until='domcontentloaded'); p.wait_for_timeout(1500)
     p.fill('input[name="login"]', user); p.fill('input[name="password"]', 'nobel-test-1234')

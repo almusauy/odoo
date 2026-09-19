@@ -1,6 +1,8 @@
+import os
+WORK = os.environ.get('NBL_MANUAL_WORK', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'work'))
+CHROME = os.environ.get('NBL_CHROME', '/opt/pw-browsers/chromium-1194/chrome-linux/chrome')
 import sys
 from playwright.sync_api import sync_playwright
-CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
 src, out = sys.argv[1], sys.argv[2]
 with sync_playwright() as pw:
     b = pw.chromium.launch(executable_path=CHROME, args=['--no-sandbox'])
